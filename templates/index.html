@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARGUS // Global Surveillance Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    
+    <style>
+        body {
+            background-color: #0d1117;
+            color: #e6edf3;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
+        /* Efek Taktis Glassmorphism Gelap */
+        .tactical-panel {
+            background: rgba(13, 17, 23, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(48, 54, 61, 0.8);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+        }
+        .cyan-glow {
+            text-shadow: 0 0 10px rgba(34, 211, 238, 0.6);
+        }
+        /* Custom scrollbar untuk log panel */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.1);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #30363d;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen overflow-hidden relative m-0 p-0 select-none">
+
+    <div id="map" class="absolute inset-0 z-0 w-full h-full"></div>
+
+    <div class="absolute top-4 right-4 z-10 w-80 tactical-panel rounded-xl p-5">
+        <div class="flex justify-between items-center mb-4">
+            <div>
+                <h1 class="text-2xl font-black tracking-widest text-white cyan-glow">ARGUS</h1>
+                <p class="text-[10px] text-cyan-400 font-bold uppercase tracking-widest">Global Node Network</p>
+            </div>
+            <div class="w-3 h-3 rounded-full bg-emerald-500 animate-ping"></div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 mb-4">
+            <div class="bg-black/40 border border-slate-800 p-3 rounded-lg text-center">
+                <span class="text-[10px] text-slate-400 block uppercase font-bold">Total Nodes</span>
+                <span id="stat-total" class="text-xl font-black text-white font-mono">00,000</span>
+            </div>
+            <div class="bg-black/40 border border-slate-800 p-3 rounded-lg text-center">
+                <span class="text-[10px] text-slate-400 block uppercase font-bold">System Status</span>
+                <span id="stat-status" class="text-xs font-black text-emerald-400 block mt-1 uppercase">Loading</span>
+            </div>
+        </div>
+
+        <div class="space-y-2 text-xs">
+            <div class="flex justify-between items-center bg-slate-900/50 p-2 rounded border border-slate-800/60">
+                <span class="text-slate-400 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-cyan-400"></span> Live Video
+                </span>
+                <span id="stat-live" class="font-bold text-white font-mono">0,000</span>
+            </div>
+            <div class="flex justify-between items-center bg-slate-900/50 p-2 rounded border border-slate-800/60">
+                <span class="text-slate-400 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-blue-500"></span> Static Feed
+                </span>
+                <span id="stat-static" class="font-bold text-white font-mono">00,000</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="absolute bottom-4 right-4 z-10 w-80 tactical-panel rounded-xl p-4 flex flex-col max-h-[40vh]">
+        <div class="border-b border-slate-800 pb-2 mb-3">
+            <h3 class="text-sm font-bold text-white uppercase tracking-wider">Sector Filter</h3>
+            <p class="text-[10px] text-slate-500">Filter regional node deployment</p>
+        </div>
+        <div id="sector-list" class="space-y-1.5 overflow-y-auto pr-1 flex-1 text-xs">
+            </div>
+        <button onclick="loadMapFeeds(null)" class="mt-3 w-full bg-slate-800 hover:bg-slate-700 text-[10px] text-cyan-400 font-bold uppercase py-2 rounded border border-slate-700 transition-colors cursor-pointer text-center">
+            Reset Global Focus
+        </button>
+    </div>
+
+    <div id="video-panel" class="absolute top-4 left-4 z-10 w-96 tactical-panel rounded-xl overflow-hidden hidden animate-fade-in">
+        <div class="p-4 bg-black/40 border-b border-slate-800 flex justify-between items-center">
+            <div>
+                <span id="cam-live-badge" class="bg-red-600 text-white font-bold text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wider animate-pulse mr-1">LIVE</span>
+                <h2 id="cam-title" class="text-sm font-bold text-white inline-block">NODE // OVERVIEW</h2>
+                <p id="cam-sector" class="text-[10px] text-slate-400 mt-0.5">Location Metadata</p>
+            </div>
+            <button onclick="closeVideoPanel()" class="text-slate-400 hover:text-white text-lg font-bold p-1 cursor-pointer">&times;</button>
+        </div>
+        
+        <div class="w-full bg-black aspect-video relative flex items-center justify-center border-b border-slate-800">
+            <video id="video-player" class="w-full h-full object-cover hidden" controls autoplay muted></video>
+            <img id="image-player" class="w-full h-full object-cover hidden" src="" alt="Static Feed">
+            <div id="player-loader" class="text-xs text-cyan-400 font-bold animate-pulse uppercase">Connecting Link...</div>
+        </div>
+
+        <div class="p-4 space-y-2 text-[11px] bg-slate-950/40">
+            <div class="flex justify-between">
+                <span class="text-slate-500 uppercase font-bold">Node ID:</span>
+                <span id="cam-id" class="font-mono text-cyan-300 font-bold">ARG-000000</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-slate-500 uppercase font-bold">Feed Type:</span>
+                <span id="cam-type" class="text-slate-300">N/A</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-slate-500 uppercase font-bold">Telemetry:</span>
+                <span class="text-emerald-400 font-bold font-mono">SECURE_LINK // 100% OK</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="absolute bottom-4 left-4 z-10 w-72 tactical-panel rounded-xl p-4 font-mono text-[11px] space-y-1">
+        <div class="text-cyan-400 font-bold uppercase tracking-wider mb-2 border-b border-slate-800 pb-1">🛰️ Telemetry Data</div>
+        <div class="flex justify-between"><span class="text-slate-500">Map Core Engine:</span><span class="text-slate-300 font-bold">MapLibre GL Vector</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">Render Device:</span><span class="text-emerald-400 font-bold">GPU Accelerated</span></div>
+        <div class="flex justify-between"><span class="text-slate-500">FPS Target:</span><span class="text-slate-300">60 FPS // V-Sync</span></div>
+    </div>
+
+    <script>
+        // 1. Inisialisasi Peta MapLibre GL dengan Style Gelap (Dark-Matter Berbasis OpenStreetMap)
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
+            center: [20, 30], // Koordinat awal di tengah dunia
+            zoom: 1.8,
+            maxZoom: 14
+        });
+
+        let currentHls = null;
+
+        // 2. Event Pertama Saat Peta Siap: Muat Lapisan Geospasial
+        map.on('load', () => {
+            // Pasang Source GeoJSON Kosong Terlebih Dahulu
+            map.addSource('surveillance-feeds', {
+                type: 'geojson',
+                data: { "type": "FeatureCollection", "features": [] },
+                cluster: true, // AKTIFKAN FITUR CLUSTERING OTOMATIS AGAR TIDAK LAG RENDER 95K DATA
+                clusterMaxZoom: 7,
+                clusterRadius: 40
+            });
+
+            // Layer Lingkaran Pengelompokan Data (Cluster Bubbles)
+            map.addLayer({
+                id: 'clusters',
+                type: 'circle',
+                source: 'surveillance-feeds',
+                filter: ['has', 'point_count'],
+                paint: {
+                    'circle-color': ['step', ['get', 'point_count'], '#1e3a8a', 100, '#0369a1', 1000, '#0891b2'],
+                    'circle-radius': ['step', ['get', 'point_count'], 14, 100, 20, 1000, 26],
+                    'circle-stroke-width': 1.5,
+                    'circle-stroke-color': '#22d3ee'
+                }
+            });
+
+            // Teks Angka Jumlah Titik di Dalam Cluster Bubble
+            map.addLayer({
+                id: 'cluster-count',
+                type: 'symbol',
+                source: 'surveillance-feeds',
+                filter: ['has', 'point_count'],
+                layout: {
+                    'text-field': '{point_count_abbreviated}',
+                    'text-font': ['Noto Sans Regular'],
+                    'text-size': 11
+                },
+                paint: {
+                    'text-color': '#ffffff'
+                }
+            });
+
+            // Layer Titik Kamera Tunggal (Single Unclustered Points)
+            map.addLayer({
+                id: 'unclustered-point',
+                type: 'circle',
+                source: 'surveillance-feeds',
+                filter: ['!', ['has', 'point_count']],
+                paint: {
+                    'circle-color': ['match', ['get', 'type'], 'Live Video', '#22d3ee', 'Static Feed', '#3b82f6', '#ffffff'],
+                    'circle-radius': 5,
+                    'circle-stroke-width': 1,
+                    'circle-stroke-color': '#ffffff'
+                }
+            });
+
+            // Jalankan Penarikan Data Awal
+            loadMetrics();
+            loadMapFeeds(null);
+
+            // Deteksi Klik pada Cluster: Lakukan Perbesaran Otomatis (Zoom In)
+            map.on('click', 'clusters', (e) => {
+                const features = map.queryRenderedFeatures(e.point, { layers: ['clusters'] });
+                const clusterId = features[0].properties.cluster_id;
+                map.getSource('surveillance-feeds').getClusterExpansionZoom(clusterId, (err, zoom) => {
+                    if (err) return;
+                    map.easeTo({
+                        center: features[0].geometry.coordinates,
+                        zoom: zoom + 0.5
+                    });
+                });
+            });
+
+            // Deteksi Klik pada Titik Kamera Tunggal: Buka Umpan Kamera
+            map.on('click', 'unclustered-point', (e) => {
+                const props = e.features[0].properties;
+                openVideoPanel(props);
+            });
+
+            // Efek Hover Kursor pada Peta Taktis
+            map.on('mouseenter', 'clusters', () => map.getCanvas().style.cursor = 'pointer');
+            map.on('mouseleave', 'clusters', () => map.getCanvas().style.cursor = '');
+            map.on('mouseenter', 'unclustered-point', () => map.getCanvas().style.cursor = 'pointer');
+            map.on('mouseleave', 'unclustered-point', () => map.getCanvas().style.cursor = '');
+        });
+
+        // 3. Tarik Data Metrik dari API Backend
+        function loadMetrics() {
+            fetch('/api/stats')
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('stat-total').innerText = data.total_nodes;
+                    document.getElementById('stat-status').innerText = data.system_status;
+                    document.getElementById('stat-live').innerText = data.live_video;
+                    document.getElementById('stat-static').innerText = data.static_feed;
+
+                    // Render List Sektor Negara di Menu Kanan Bawah
+                    const sectorContainer = document.getElementById('sector-list');
+                    sectorContainer.innerHTML = "";
+                    data.sectors.forEach(sec => {
+                        const row = document.createElement('div');
+                        row.className = "flex justify-between items-center bg-black/30 p-2 rounded border border-slate-800/40 hover:bg-cyan-950/20 hover:border-cyan-800/50 cursor-pointer transition-colors";
+                        row.onclick = () => loadMapFeeds(sec.name);
+                        row.innerHTML = `
+                            <span class="text-slate-300 font-medium">${sec.name}</span>
+                            <span class="font-mono text-[10px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-400 font-bold">${sec.count.toLocaleString()}</span>
+                        `;
+                        sectorContainer.appendChild(row);
+                    });
+                });
+        }
+
+        // 4. Perbarui Titik Spasial Peta Menggunakan API Filter Sektor
+        function loadMapFeeds(sectorName) {
+            let url = '/api/nodes';
+            if (sectorName) {
+                url += `?sector=${encodeURIComponent(sectorName)}`;
+            }
+
+            fetch(url)
+                .then(res => res.json())
+                .then(geoJsonData => {
+                    // Update data source pada MapLibre GL
+                    map.getSource('surveillance-feeds').setData(geoJsonData);
+                    
+                    // Jika memfilter sektor tertentu, arahkan kamera satelit langsung ke pusat koordinat sektor tersebut
+                    if (sectorName && geoJsonData.features.length > 0) {
+                        const firstCoords = geoJsonData.features[0].geometry.coordinates;
+                        map.flyTo({
+                            center: firstCoords,
+                            zoom: 4,
+                            essential: true
+                        });
+                    }
+                });
+        }
+
+        // 5. Eksekusi Engine Stream Player (HLS / Static Images Handler)
+        function openVideoPanel(props) {
+            const panel = document.getElementById('video-panel');
+            const videoPlayer = document.getElementById('video-player');
+            const imagePlayer = document.getElementById('image-player');
+            const loader = document.getElementById('player-loader');
+
+            panel.style.display = 'block';
+            loader.style.display = 'block';
+            videoPlayer.style.display = 'none';
+            imagePlayer.style.display = 'none';
+
+            // Bersihkan sisa koneksi streaming HLS sebelumnya agar tidak memakan bandwidth
+            if (currentHls) {
+                currentHls.destroy();
+                currentHls = null;
+            }
+
+            // Set Metadata Text UI
+            document.getElementById('cam-title').innerText = props.name;
+            document.getElementById('cam-sector').innerText = `SECTOR // ${props.sector.toUpperCase()}`;
+            document.getElementById('cam-id').innerText = props.id;
+            document.getElementById('cam-type').innerText = props.type;
+
+            const badge = document.getElementById('cam-live-badge');
+            if (props.type === "Live Video") {
+                badge.className = "bg-red-600 text-white font-bold text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wider animate-pulse mr-1";
+                badge.innerText = "LIVE VIDEO";
+                
+                // Nyalakan Hls.js Stream Handler
+                if (Hls.isSupported()) {
+                    currentHls = new Hls();
+                    currentHls.loadSource(props.url);
+                    currentHls.attachMedia(videoPlayer);
+                    currentHls.on(Hls.Events.MANIFEST_PARSED, () => {
+                        loader.style.display = 'none';
+                        videoPlayer.style.display = 'block';
+                        videoPlayer.play();
+                    });
+                } else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
+                    // Penanganan fallback native Safari / iOS Mobile Devices
+                    videoPlayer.src = props.url;
+                    videoPlayer.addEventListener('loadedmetadata', () => {
+                        loader.style.display = 'none';
+                        videoPlayer.style.display = 'block';
+                        videoPlayer.play();
+                    });
+                }
+            } else {
+                // Penanganan jenis feed gambar statis berfrekuensi tinggi (Static Imaging Mode)
+                badge.className = "bg-blue-600 text-white font-bold text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wider mr-1";
+                badge.innerText = "STATIC FEED";
+                
+                imagePlayer.src = props.url + "?t=" + new Date().getTime(); // Anti-Caching string query
+                imagePlayer.onload = () => {
+                    loader.style.display = 'none';
+                    imagePlayer.style.display = 'block';
+                };
+            }
+        }
+
+        // 6. Tutup Panel Pengawasan Kiri
+        function closeVideoPanel() {
+            document.getElementById('video-panel').style.display = 'none';
+            const videoPlayer = document.getElementById('video-player');
+            videoPlayer.pause();
+            if (currentHls) {
+                currentHls.destroy();
+                currentHls = null;
+            }
+        }
+    </script>
+</body>
+</html>
