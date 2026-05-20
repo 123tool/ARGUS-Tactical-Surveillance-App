@@ -1,4 +1,4 @@
-## 🛰️ ARGUS - Tactical Surveillance Dashboard
+## ARGUS - Tactical Surveillance Dashboard
 
 ### *High-Performance Geospatial Analytics & Global Open-Data Camera Stream Aggregator*
 Brought to you by **SPY-E** & **123Tool** ---
@@ -9,8 +9,7 @@ Dengan menggabungkan pustaka peta berbasis akselerasi perangkat keras (**MapLibr
 
 ---
 
-## 🔥 Fitur Utama
-
+## Fitur :
 * **Global Surveillance Scale:** Visualisasi komprehensif untuk ~95,838 node aktif yang terbagi ke dalam 120+ sektor internasional (AS, Inggris, Jerman, China, Jepang, Indonesia).
 * **GPU-Accelerated Geospatial Rendering:** Pemetaan taktis interaktif memanfaatkan akselerasi GPU via MapLibre GL dengan sistem *Dynamic Clustering Engine* otomatis untuk mencegah beban memori browser berlebih.
 * **Adaptive Stream Processing:** Manajemen penanganan umpan multimedia cerdas yang mendukung pemutaran video streaming langsung (*Low-Latency HLS/M3U8*) menggunakan `Hls.js` serta pemrosesan gambar statis berfrekuensi tinggi (*High-Frequency Static Imaging*).
@@ -22,13 +21,13 @@ Dengan menggabungkan pustaka peta berbasis akselerasi perangkat keras (**MapLibr
 
 Ikuti langkah-langkah di bawah ini untuk memasang dan menjalankan dasbor ARGUS di lingkungan server lokal atau VPS Anda:
 
-## 1. Kloning Repositori
+## 1. Clone
 Langkah pertama, unduh kode sumber proyek dari repositori GitHub :
 ```bash
 git clone https://github.com/123tool/ARGUS-Tactical-Surveillance-App.git
 cd ARGUS-Tactical-Surveillance-App
 ```
-## 2. Instalasi Dependensi Python
+## 2. Instalasi Dependensi
 ​Pastikan sistem Anda sudah terpasang Python versi 3.9 ke atas, lalu instal micro-framework Flask sebagai dependensi utama server backend :
 ```
 pip install flask
